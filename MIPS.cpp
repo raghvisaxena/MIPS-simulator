@@ -6,11 +6,17 @@
 using namespace std;
 #define ADDU 1
 #define SUBU 3
+#define ADD 0
+#define SUB 2
 #define AND 4
 #define OR  5
 #define NOR 7
-#define MemSize 65536 // memory size, in reality, the memory size should be 2^32, but for this lab, for the space reason,
-//we keep it as this large number, but the memory is still 32-bit addressable.
+#define MUL 24
+#define DIV 26
+#define MULU 25
+#define DIVU 27
+#define MemSize 65536 // actual memory size should be 2^32, but for this project, for the space reasons,
+//we keep it as 65536, the memory is still 32-bit addressable.
 
 class RF
 {
@@ -22,14 +28,14 @@ public:
         Registers[0] = bitset<32> (0);
     }
 
-    void ReadWrite(bitset<5> RdReg1, bitset<5> RdReg2, bitset<5> WrtReg, bitset<32> WrtData, bitset<1> WrtEnable)
+    void ReadWrite(bitset<5> RdReg1, bitset<5> RdReg2, bitset<5> WrtReg, bitset<32> WrtData, int WrtEnable)
     {
         // implement the function by you.
             
             ReadData1 = Registers[RdReg1.to_ulong()];   // perform read operation
             ReadData2 = Registers[RdReg2.to_ulong()];
 
-         if(WrtEnable.to_ulong() == 1){
+         if(WrtEnable == 1){    
            
             Registers[WrtReg.to_ulong()] = WrtData;    // perform write operation
         }
@@ -42,7 +48,7 @@ public:
         if (rfout.is_open())
         {
             rfout<<"A state of RF:"<<endl;
-            for (int j = 0; j<32; j++)
+            for (int j = 0; j<32; j++) 
             {
                 rfout << Registers[j]<<endl;
             }
@@ -51,7 +57,7 @@ public:
         rfout.close();
     }
 private:
-    vector<bitset<32> >Registers;
+    vector<bitset<32>>Registers;
 
 };
 
@@ -60,11 +66,17 @@ class ALU
 public:
     bitset<32> ALUresult;
     bitset<32> ALUOperation (bitset<3> ALUOP, bitset<32> oprand1, bitset<32> oprand2)
-    {    // implement the ALU operations by you.
+    {    // implement the ALU operations.
         unsigned long result;
-
+        
         if(ALUOP.to_string() == "001"){
             result = oprand1.to_ulong() + oprand2.to_ulong(); // addu operation
+        }
+        else if(ALUOP.to_string() == "000"){
+            result = oprand1.to_ulong() + oprand2.to_ulong(); // add operation
+        }
+        else if(ALUOP.to_string() == "010"){
+            result = oprand1.to_ulong() - oprand2.to_ulong(); // sub operation
         }
         else if(ALUOP.to_string() == "011"){
             result = oprand1.to_ulong() - oprand2.to_ulong(); // subu operation
@@ -78,10 +90,36 @@ public:
         else if(ALUOP.to_string() == "111"){
             result = ~(oprand1.to_ulong() | oprand2.to_ulong()); // nor operation
         }
-
+        
         bitset<32> res((int)result);
+
         ALUresult = res;
         return ALUresult;
+    }
+
+    bitset<32> ALUresults;
+    bitset<32> ALUOperations (bitset<6> ALUOP, bitset<32> oprand1, bitset<32> oprand2)
+    {    // implement the ALU operations.
+        unsigned long result;
+        cout<<"ALUOP: "<<ALUOP<<endl; 
+
+        if(ALUOP.to_string() == "011000"){
+            result = oprand1.to_ulong() * oprand2.to_ulong(); // mul operation
+        }
+        else if(ALUOP.to_string() == "011001"){
+            result = oprand1.to_ulong() * oprand2.to_ulong(); // mulu operation
+        }
+        else if(ALUOP.to_string() == "011010"){
+            result = oprand1.to_ulong() / oprand2.to_ulong(); // div operation
+        }
+        else if(ALUOP.to_string() == "011011"){
+            result = oprand1.to_ulong() / oprand2.to_ulong(); // divu operation
+        }
+         
+        bitset<32> res((int)result);
+
+        ALUresults = res;
+        return ALUresults;
     }
 };
 
@@ -99,7 +137,9 @@ public:
         {
             while (getline(imem,line))
             {
-                IMem[i] = bitset<8>(line);
+                bitset<8> b1(line);
+                IMem[i] = b1;
+                //IMem[i] = bitset<8>(line);
                 i++;
             }
         }
@@ -143,7 +183,9 @@ public:
         {
             while (getline(dmem,line))
             {
-                DMem[i] = bitset<8>(line);
+                bitset<8> b2(line);
+                DMem[i] = b2;
+                //DMem[i] = bitset<8>(line);
                 i++;
             }
         }
@@ -217,6 +259,17 @@ string TypeofFunction(bitset<32> instruction){
     else if (aluOp == "100") return "and";
     else if (aluOp == "101") return "or";
     else if (aluOp == "111") return "nor";
+    else if (aluOp == "000") return "add";
+    else if (aluOp == "010") return "sub"; 
+    else return "Invalid AluOP";
+}
+string TypeofFunctions(bitset<32> instruction){
+    string aluOp = instruction.to_string().substr(26,6);
+    
+    if(aluOp == "011000") return "mul";
+    else if (aluOp == "011001") return "mulu";
+    else if (aluOp == "011010") return "div";
+    else if (aluOp == "011011") return "divu";
     else return "Invalid AluOP";
 }
 
@@ -266,13 +319,15 @@ int main()
 
     bitset<32> programCounter = bitset<32> (0),instruction;
 
-    string Type_instruction, Type_function;
+    string Type_instruction, Type_function, Type_functions;
     bitset<5> Addr_Rs, Addr_Rt, Addr_Rd;
     bitset<32> $Rs,$Rd,$Rt,AluResult;
-    bitset<3> add_op(ADDU), subu_op(SUBU), and_op(AND), or_op(OR), nor_op(NOR);
+    bitset<3> addu_op(ADDU), subu_op(SUBU), and_op(AND), or_op(OR), nor_op(NOR),add_op(ADD),sub_op(SUB);
+    bitset<6> mul_op(MUL),div_op(DIV),mulu_op(MULU),divu_op(DIVU);
     vector<bitset<5> > RAddresses;
     vector<string> IAddressess(3);
     unsigned long counter=0;
+    int flag = 0;
 
     while (1)
     {
@@ -296,19 +351,30 @@ int main()
             Addr_Rd = RAddresses[2];
 
             Type_function = TypeofFunction(instruction);
+            Type_functions = TypeofFunctions(instruction);
+            string f;
 
             //Execute
             myRF.ReadWrite(Addr_Rs,Addr_Rt,NULL,NULL,0);
             $Rs = myRF.ReadData1;
             $Rt = myRF.ReadData2;
+            cout<<"$rs and $Rt: "<<$Rs<<" "<<$Rt<<endl;
 
             // ALU operation
-            if(Type_function == "addu") AluResult = myALU.ALUOperation(add_op, $Rs, $Rt);
-            else if(Type_function == "and") AluResult = myALU.ALUOperation(and_op, $Rs, $Rt);
-            else if(Type_function == "or") AluResult = myALU.ALUOperation(or_op, $Rs, $Rt);
-            else if(Type_function == "nor") AluResult = myALU.ALUOperation(nor_op, $Rs, $Rt);
-            else if(Type_function == "subu") AluResult = myALU.ALUOperation(subu_op, $Rs, $Rt);
+            if(Type_function == "addu") {AluResult = myALU.ALUOperation(addu_op, $Rs, $Rt); f=Type_function;}
+            else if(Type_function == "add") {AluResult = myALU.ALUOperation(add_op, $Rs, $Rt); f=Type_function;}
+            else if(Type_function == "sub") {AluResult = myALU.ALUOperation(subu_op, $Rs, $Rt); f=Type_function;}
+            else if(Type_function == "and") {AluResult = myALU.ALUOperation(and_op, $Rs, $Rt); f=Type_function;}
+            else if(Type_function == "or") {AluResult = myALU.ALUOperation(or_op, $Rs, $Rt); f=Type_function;}
+            else if(Type_function == "nor") {AluResult = myALU.ALUOperation(nor_op, $Rs, $Rt); f=Type_function;}
+            else if(Type_function == "subu") {AluResult = myALU.ALUOperation(subu_op, $Rs, $Rt); f=Type_function;}
 
+            if(Type_functions == "mul") {AluResult = myALU.ALUOperations(mul_op, $Rs, $Rt); f=Type_functions;}
+            else if(Type_functions == "div") {AluResult = myALU.ALUOperations(div_op, $Rs, $Rt); f=Type_functions;}
+            else if(Type_functions == "mulu") {AluResult = myALU.ALUOperations(mulu_op, $Rs, $Rt); f=Type_functions;}
+            else if(Type_functions == "divu") {AluResult = myALU.ALUOperations(divu_op, $Rs, $Rt); f=Type_functions;}
+            cout<<"ALU RESULT : "<<AluResult<<endl;
+            cout<<"Instruction : "<<f<<endl;
             myRF.ReadWrite(NULL, NULL, Addr_Rd, AluResult, 1); //Writing result to write register
             programCounter = calc_PC(programCounter);
         }
@@ -319,34 +385,54 @@ int main()
                 bitset<5> RsIAddr(IAddressess[0]);
                 bitset<5> RtIAddr(IAddressess[1]);
                 bitset<16> ImmIAddr(IAddressess[2]);
-
+                unsigned long templ = RsIAddr.to_ulong();
+                int temp = (int)templ; temp++;
+                bitset<5> RsIAddrt(to_string(temp));
+                RsIAddr = RsIAddrt;
                 myRF.ReadWrite(RsIAddr, NULL, NULL, NULL, 0);
-
                 $Rs = myRF.ReadData1;
-                string finalImmStr; //complete Imm
+                string finalImmStr,finalImmStrs; //complete Imm
 
                 if (ImmIAddr.to_string().at(0) == '0') {
-                    finalImmStr = "0000000000000000" + ImmIAddr.to_string();
+                        finalImmStr = "00000000000000000000000000000000";
+                        finalImmStrs = "0000000000000000" + ImmIAddr.to_string();
                 } 
                 else if (ImmIAddr.to_string().at(0) == '1') {
                     finalImmStr = "1111111111111111" + ImmIAddr.to_string();
                 }
                 bitset<32> finalImm(finalImmStr);
-
-                AluResult = myALU.ALUOperation(add_op, $Rs, finalImm); //find effective address of memory
-
+                bitset<32> finalImms(finalImmStrs);
+                string t = "00000000000000000000000000000000";
+                bitset<32> taddr(t);
+                if(flag==0){
+                    //find effective address of memory
+                    AluResult = finalImms;
+                    flag = 1;
+                }
+                else{
+                    //find effective address of memory 
+                    AluResult = finalImm;  
+                    flag = 0;
+                }
+                
             if(Type_instruction == "lw") {
                 bitset<32> operand1 = myDataMem.MemoryAccess(AluResult, NULL, 1, 0); //get value from Data Memory
-
-                myRF.ReadWrite(NULL, NULL, RtIAddr, operand1, 1); //load value into the register
+                if(flag == 0){
+                    myRF.ReadWrite(NULL, NULL, RsIAddr, operand1, 1); //load value into the register
+                }
+                else{
+                    myRF.ReadWrite(NULL, NULL, RtIAddr, operand1, 1); //load value into the register
+                }
                 programCounter = calc_PC(programCounter);
             }
 
             else if(Type_instruction == "sw"){
                 myRF.ReadWrite(RtIAddr,NULL,NULL,NULL,0); // get value from register
                 $Rd = myRF.ReadData1;
-
-                bitset<32> useless = myDataMem.MemoryAccess(AluResult,$Rd,0,1); //store value to data memory
+                unsigned long laddr = AluResult.to_ulong();
+                int iaddr = (int) laddr + 4;
+                bitset<32> aluaddr(iaddr);
+                bitset<32> useless = myDataMem.MemoryAccess(aluaddr,$Rd,0,1); //store value to data memory
                 programCounter = calc_PC(programCounter);
             }
 
