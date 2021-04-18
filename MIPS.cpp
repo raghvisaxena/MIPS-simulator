@@ -15,6 +15,7 @@ using namespace std;
 #define DIV 26
 #define MULU 25
 #define DIVU 27
+#define XOR 6
 #define MemSize 65536 // actual memory size should be 2^32, but for this project, for the space reasons,
 //we keep it as 65536, the memory is still 32-bit addressable.
 
@@ -89,6 +90,9 @@ public:
         }
         else if(ALUOP.to_string() == "111"){
             result = ~(oprand1.to_ulong() | oprand2.to_ulong()); // nor operation
+        }
+        else if(ALUOP.to_string() == "110"){
+            result = ~(oprand1.to_ulong() ^ oprand2.to_ulong()); // xor operation
         }
         
         bitset<32> res((int)result);
@@ -261,6 +265,7 @@ string TypeofFunction(bitset<32> instruction){
     else if (aluOp == "111") return "nor";
     else if (aluOp == "000") return "add";
     else if (aluOp == "010") return "sub"; 
+    else if (aluOp == "110") return "xor"; 
     else return "Invalid AluOP";
 }
 string TypeofFunctions(bitset<32> instruction){
@@ -322,7 +327,7 @@ int main()
     string Type_instruction, Type_function, Type_functions;
     bitset<5> Addr_Rs, Addr_Rt, Addr_Rd;
     bitset<32> $Rs,$Rd,$Rt,AluResult;
-    bitset<3> addu_op(ADDU), subu_op(SUBU), and_op(AND), or_op(OR), nor_op(NOR),add_op(ADD),sub_op(SUB);
+    bitset<3> addu_op(ADDU), subu_op(SUBU), and_op(AND), or_op(OR), nor_op(NOR),add_op(ADD),sub_op(SUB), xor_op(XOR);
     bitset<6> mul_op(MUL),div_op(DIV),mulu_op(MULU),divu_op(DIVU);
     vector<bitset<5> > RAddresses;
     vector<string> IAddressess(3);
@@ -368,6 +373,7 @@ int main()
             else if(Type_function == "or") {AluResult = myALU.ALUOperation(or_op, $Rs, $Rt); f=Type_function;}
             else if(Type_function == "nor") {AluResult = myALU.ALUOperation(nor_op, $Rs, $Rt); f=Type_function;}
             else if(Type_function == "subu") {AluResult = myALU.ALUOperation(subu_op, $Rs, $Rt); f=Type_function;}
+            else if(Type_function == "xor") {AluResult = myALU.ALUOperation(xor_op, $Rs, $Rt); f=Type_function;}
 
             if(Type_functions == "mul") {AluResult = myALU.ALUOperations(mul_op, $Rs, $Rt); f=Type_functions;}
             else if(Type_functions == "div") {AluResult = myALU.ALUOperations(div_op, $Rs, $Rt); f=Type_functions;}
